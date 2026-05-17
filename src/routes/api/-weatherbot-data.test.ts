@@ -122,29 +122,69 @@ describe('weatherbot route data', () => {
     vi.resetModules()
     const root = path.join('/tmp', `weatherbot-api-${Date.now()}`)
     await seedWeatherbotRoot(root)
+    const previousRoot = process.env.WEATHERBOT_ROOT
     process.env.WEATHERBOT_ROOT = root
 
-    const mod = await import('./weatherbot')
-    const get = (mod as any).Route.server.handlers.GET
+    try {
+      const mod = await import('./weatherbot')
+      const get = (mod as any).Route.server.handlers.GET
 
-    const res = await get({
-      request: new Request('http://localhost/api/weatherbot'),
-    })
+      const res = await get({
+        request: new Request('http://localhost/api/weatherbot'),
+      })
 
-    expect(res.status).toBe(200)
-    const data = await res.json()
-    expect(data.ok).toBe(true)
-    expect(data.source.repoPath).toBe(root)
-    expect(data.source.repoName).toBe('weatherbot-lab-20260513-214224')
-    expect(data.stats.startingBalance).toBe(10000)
-    expect(data.files.eventsCountApprox).toBe(2)
-    expect(data.capitalHistory).toHaveLength(2)
-    expect(data.closedPositions).toHaveLength(1)
-    expect(data.closedPositions[0]).toMatchObject({
-      city: 'atlanta',
-      closeReason: 'stop_loss',
-      pnl: -4.55,
-    })
-    await fs.rm(root, { recursive: true, force: true })
+      expect(res.status).toBe(200)
+      const data = await res.json()
+      expect(data.ok).toBe(true)
+      expect(data.source.repoPath).toBe(root)
+      expect(data.source.repoName).toBe('weatherbot-lab-20260513-214224')
+      expect(data.stats.startingBalance).toBe(10000)
+      expect(data.files.eventsCountApprox).toBe(2)
+      expect(data.capitalHistory).toHaveLength(2)
+      expect(data.closedPositions).toHaveLength(1)
+      expect(data.closedPositions[0]).toMatchObject({
+        city: 'atlanta',
+        closeReason: 'stop_loss',
+        pnl: -4.55,
+      })
+    } finally {
+      if (previousRoot === undefined) delete process.env.WEATHERBOT_ROOT
+      else process.env.WEATHERBOT_ROOT = previousRoot
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('discovers a weatherbot root from scan bases when env overrides are missing', async () => {
+    vi.resetModules()
+    const base = path.join('/tmp', `weatherbot-scan-${Date.now()}`)
+    const root = path.join(base, 'weatherbot')
+    await seedWeatherbotRoot(root)
+
+    const previousRoot = process.env.WEATHERBOT_ROOT
+    const previousScanRoots = process.env.WEATHERBOT_SCAN_ROOTS
+    delete process.env.WEATHERBOT_ROOT
+    process.env.WEATHERBOT_SCAN_ROOTS = base
+
+    try {
+      const mod = await import('./weatherbot')
+      const get = (mod as any).Route.server.handlers.GET
+
+      const res = await get({
+        request: new Request('http://localhost/api/weatherbot'),
+      })
+
+      expect(res.status).toBe(200)
+      const data = await res.json()
+      expect(data.ok).toBe(true)
+      expect(data.source.repoPath).toBe(root)
+      expect(data.source.repoSource).toBe(`scan:${base}`)
+      expect(data.stats.startingBalance).toBe(10000)
+    } finally {
+      if (previousRoot === undefined) delete process.env.WEATHERBOT_ROOT
+      else process.env.WEATHERBOT_ROOT = previousRoot
+      if (previousScanRoots === undefined) delete process.env.WEATHERBOT_SCAN_ROOTS
+      else process.env.WEATHERBOT_SCAN_ROOTS = previousScanRoots
+      await fs.rm(base, { recursive: true, force: true })
+    }
   })
 })
