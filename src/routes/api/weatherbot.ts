@@ -6,8 +6,8 @@ import { requireLocalOrAuth } from '../../server/auth-middleware'
 
 type JsonRecord = Record<string, unknown>
 
-const WEATHERBOT_REPO_NAME = 'weatherbot-lab-20260513-214224'
-const CANONICAL_WEATHERBOT_ROOT = '/home/ubuntu/coferlandia-vm/hermes/data/hermes-data/repos/weatherbot-lab-20260513-214224'
+const WEATHERBOT_REPO_NAME = 'weatherbot'
+const CANONICAL_WEATHERBOT_ROOT = '/root/hermes-data/repos/weatherbot'
 const TRACE_DIR = 'data/trace'
 const MARKETS_DIR = 'data/markets'
 const STATE_FILE = 'data/state.json'

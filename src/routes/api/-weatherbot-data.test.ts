@@ -18,6 +18,19 @@ vi.mock('../../server/auth-middleware', () => ({
   requireLocalOrAuth: () => true,
 }))
 
+let weatherbotExistsSyncOverride: ((candidatePath: string) => boolean | undefined) | null = null
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  return {
+    ...actual,
+    existsSync: (candidatePath: Parameters<typeof actual.existsSync>[0]) => {
+      const override = weatherbotExistsSyncOverride?.(String(candidatePath))
+      return typeof override === 'boolean' ? override : actual.existsSync(candidatePath)
+    },
+  }
+})
+
 async function seedWeatherbotRoot(root: string) {
   await fs.mkdir(path.join(root, 'data/trace'), { recursive: true })
   await fs.mkdir(path.join(root, 'data/markets'), { recursive: true })
@@ -137,7 +150,7 @@ describe('weatherbot route data', () => {
       const data = await res.json()
       expect(data.ok).toBe(true)
       expect(data.source.repoPath).toBe(root)
-      expect(data.source.repoName).toBe('weatherbot-lab-20260513-214224')
+      expect(data.source.repoName).toBe('weatherbot')
       expect(data.stats.startingBalance).toBe(10000)
       expect(data.files.eventsCountApprox).toBe(2)
       expect(data.capitalHistory).toHaveLength(2)
@@ -165,6 +178,13 @@ describe('weatherbot route data', () => {
     delete process.env.WEATHERBOT_ROOT
     process.env.WEATHERBOT_SCAN_ROOTS = base
 
+    weatherbotExistsSyncOverride = (candidatePath: string) => {
+      if (candidatePath.startsWith('/root/hermes-data/repos/weatherbot')) {
+        return false
+      }
+      return undefined
+    }
+
     try {
       const mod = await import('./weatherbot')
       const get = (mod as any).Route.server.handlers.GET
@@ -180,6 +200,7 @@ describe('weatherbot route data', () => {
       expect(data.source.repoSource).toBe(`scan:${base}`)
       expect(data.stats.startingBalance).toBe(10000)
     } finally {
+      weatherbotExistsSyncOverride = null
       if (previousRoot === undefined) delete process.env.WEATHERBOT_ROOT
       else process.env.WEATHERBOT_ROOT = previousRoot
       if (previousScanRoots === undefined) delete process.env.WEATHERBOT_SCAN_ROOTS
