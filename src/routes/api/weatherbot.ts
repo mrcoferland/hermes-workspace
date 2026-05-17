@@ -15,18 +15,6 @@ const METRICS_FILE = `${TRACE_DIR}/metrics.json`
 const DASHBOARD_FILE = `${TRACE_DIR}/dashboard.txt`
 const EVENTS_FILE = `${TRACE_DIR}/events.jsonl`
 const CAPITAL_HISTORY_FILE = `${TRACE_DIR}/capital_history.jsonl`
-const DEFAULT_WEATHERBOT_SCAN_BASES = [
-  '/root/hermes-data/repos',
-  '/root/project/hermes-data/repos',
-  '/root/project/hermes/data/hermes-data/repos',
-  '/root/project/hermes-workspace',
-  '/root/project',
-  '/workspace',
-  '/tmp',
-  process.env.HOME?.trim(),
-].filter((value): value is string => Boolean(value))
-
-const WEATHERBOT_SCAN_ROOTS_ENV = 'WEATHERBOT_SCAN_ROOTS'
 
 type WeatherbotRootResolution = {
   path: string
@@ -37,63 +25,9 @@ function hasWeatherbotState(repoPath: string): boolean {
   return existsSync(join(repoPath, STATE_FILE)) && existsSync(join(repoPath, METRICS_FILE)) && existsSync(join(repoPath, DASHBOARD_FILE))
 }
 
-function parseScanRoots(raw: string | undefined): string[] {
-  return (raw ?? '')
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean)
-}
-
-function collectWeatherbotCandidates(): Array<[string, string]> {
-  const candidates = new Map<string, string>()
-  const addCandidate = (candidatePath: string | undefined, source: string) => {
-    if (!candidatePath) return
-    const normalized = candidatePath.trim()
-    if (!normalized || candidates.has(normalized)) return
-    candidates.set(normalized, source)
-  }
-
-  const envCandidates: Array<[string, string | undefined]> = [
-    ['env:WEATHERBOT_ROOT', process.env.WEATHERBOT_ROOT?.trim()],
-    ['env:HERMES_WEATHERBOT_ROOT', process.env.HERMES_WEATHERBOT_ROOT?.trim()],
-    ['env:WEATHERBOT_REPO_PATH', process.env.WEATHERBOT_REPO_PATH?.trim()],
-  ]
-
-  for (const [source, candidate] of envCandidates) {
-    if (candidate) addCandidate(candidate, source)
-  }
-
-  addCandidate(CANONICAL_WEATHERBOT_ROOT, 'canonical-root')
-
-  const scanBases = [...parseScanRoots(process.env[WEATHERBOT_SCAN_ROOTS_ENV]), ...DEFAULT_WEATHERBOT_SCAN_BASES]
-  for (const base of scanBases) {
-    addCandidate(base, `scan-base:${base}`)
-    if (!existsSync(base)) continue
-
-    let entries: Array<{ name: string; isDirectory: () => boolean }> = []
-    try {
-      entries = readdirSync(base, { withFileTypes: true }) as Array<{ name: string; isDirectory: () => boolean }>
-    } catch {
-      continue
-    }
-
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue
-      const lower = entry.name.toLowerCase()
-      if (lower === 'weatherbot' || lower.startsWith('weatherbot-')) {
-        addCandidate(join(base, entry.name), `scan:${base}`)
-      }
-    }
-  }
-
-  return [...candidates.entries()]
-}
-
 function resolveWeatherbotRoot(): WeatherbotRootResolution {
-  for (const [candidatePath, source] of collectWeatherbotCandidates()) {
-    if (hasWeatherbotState(candidatePath)) {
-      return { path: candidatePath, source }
-    }
+  if (hasWeatherbotState(CANONICAL_WEATHERBOT_ROOT)) {
+    return { path: CANONICAL_WEATHERBOT_ROOT, source: 'canonical-root' }
   }
 
   return { path: CANONICAL_WEATHERBOT_ROOT, source: 'canonical-root-default' }
