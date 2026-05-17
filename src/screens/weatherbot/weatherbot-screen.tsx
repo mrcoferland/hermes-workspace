@@ -100,6 +100,19 @@ type CapitalPoint = {
 }
 
 const REFRESH_MS = 30_000
+const SESSION_HEADER = 'X-Hermes-Session-Token'
+
+async function fetchJSON<T>(url: string): Promise<T> {
+  const headers = new Headers()
+  const token = window.__HERMES_SESSION_TOKEN__
+  if (token) headers.set(SESSION_HEADER, token)
+  const res = await fetch(url, { headers })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw new Error(`${res.status}: ${text}`)
+  }
+  return res.json() as Promise<T>
+}
 
 function formatMoney(value: number | null | undefined): string {
   if (typeof value !== 'number' || Number.isNaN(value)) return '—'
@@ -231,15 +244,12 @@ export function WeatherbotScreen() {
     const load = async () => {
       try {
         setError(null)
-        const res = await fetch(`/api/weatherbot?ts=${Date.now()}`, { cache: 'no-store' })
-        const data = (await res.json()) as WeatherbotPayload & {
+        const data = await fetchJSON<WeatherbotPayload & {
           error?: string
           message?: string
-        }
-        if (!res.ok || !data.ok) {
-          throw new Error(
-            data.message || data.error || `weatherbot fetch failed (${res.status})`,
-          )
+        }>(`/api/weatherbot?ts=${Date.now()}`)
+        if (!data.ok) {
+          throw new Error(data.message || data.error || 'weatherbot fetch failed')
         }
         if (!cancelled) {
           setPayload(data)
